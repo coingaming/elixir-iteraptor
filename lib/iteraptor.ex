@@ -223,6 +223,10 @@ defmodule Iteraptor do
       prefix = join(prefix, k, joiner)
 
       case v do
+        naive_date_time = %NaiveDateTime{} ->
+          new_value = NaiveDateTime.to_string(naive_date_time)
+          unless is_nil(fun), do: fun.({prefix, new_value})
+          Map.put memo, prefix, new_value
         time = %Time{} ->
           new_value = Time.to_string(time)
           unless is_nil(fun), do: fun.({prefix, new_value})
