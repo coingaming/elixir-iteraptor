@@ -34,7 +34,7 @@ defmodule Iteraptor do
   """
 
   @joiner "."
-  @struct_joiner "%"
+  @struct_joiner "_"
 
   @doc """
   Build a flatmap out of nested structure, concatenating the names of keys.
@@ -90,7 +90,7 @@ defmodule Iteraptor do
       %{"a.b.c" => 42, "a.b.d.0" => nil, "a.b.d.1" => 42, "a.e.0" => :f, "a.e.1" => 42}
 
       iex> %Struct1{field1: %Struct2{field2: [%{a: 42}, :b]}} |> Iteraptor.to_flatmap
-      %{"Struct1%field1.Struct2%field2.0.a" => 42, "Struct1%field1.Struct2%field2.1" => :b}
+      %{"Struct1_field1.Struct2_field2.0.a" => 42, "Struct1_field1.Struct2_field2.1" => :b}
   """
 
   def to_flatmap(input, joiner \\ @joiner) when is_map(input) or is_list(input) do
@@ -140,7 +140,7 @@ defmodule Iteraptor do
       ...> |> Iteraptor.from_flatmap
       %{a: %{b: %{c: 42, d: [nil, 42]}, e: [:f, 42]}}
 
-      iex> %{"Struct1%field1.Struct2%field2.0.a" => 42, "Struct1%field1.Struct2%field2.1" => :b}
+      iex> %{"Struct1_field1.Struct2_field2.0.a" => 42, "Struct1_field1.Struct2_field2.1" => :b}
       ...> |> Iteraptor.from_flatmap
       %Struct1{field1: %Struct2{field2: [%{a: 42}, :b]}}
   """
@@ -221,12 +221,33 @@ defmodule Iteraptor do
   defp process(input, joiner, :map, prefix, acc, fun) do
     input |> Enum.reduce(acc, fn({k, v}, memo) ->
       prefix = join(prefix, k, joiner)
-      if is_map(v) or is_list(v) do
-        process(v, joiner, nil, prefix, memo, fun)
-      else
-        unless is_nil(fun), do: fun.({prefix, v})
-        Map.put memo, prefix, v
+
+      case v do
+        time = %Time{} ->
+          new_value = Time.to_string(time)
+          unless is_nil(fun), do: fun.({prefix, new_value})
+          Map.put memo, prefix, new_value
+        date_time = %DateTime{} ->
+          new_value = DateTime.to_string(date_time)
+          unless is_nil(fun), do: fun.({prefix, new_value})
+          Map.put memo, prefix, new_value
+        date = %Date{} ->
+          new_value = Date.to_string(date)
+          unless is_nil(fun), do: fun.({prefix, new_value})
+          Map.put memo, prefix, new_value
+        nested when is_map(nested) or is_list(nested) ->
+          process(v, joiner, nil, prefix, memo, fun)
+        _ ->
+          unless is_nil(fun), do: fun.({prefix, v})
+          Map.put memo, prefix, v
       end
+
+#      if is_map(v) or is_list(v) do
+ #       process(v, joiner, nil, prefix, memo, fun)
+  #    else
+   #     unless is_nil(fun), do: fun.({prefix, v})
+    #    Map.put memo, prefix, v
+     # end
     end)
   end
 
@@ -251,7 +272,7 @@ defmodule Iteraptor do
       |> Map.keys
       |> Enum.filter(fn e -> e != :__struct__ end)
       |> Enum.map(fn e ->
-           {"#{struct_name}%#{e}", get_in(input, [Access.key!(e)])}
+           {"#{struct_name}_#{e}", get_in(input, [Access.key!(e)])}
          end)
       |> Enum.into(%{})
       |> process(joiner, nil, prefix, acc, fun)
